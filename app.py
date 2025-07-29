@@ -3,6 +3,17 @@ from google.api_core.exceptions import ResourceExhausted
 import openai
 from dotenv import load_dotenv
 import os
+import datetime
+import ctypes.wintypes
+
+# return desktop path
+def get_windows_desktop_path():
+    CSIDL_DESKTOP = 0x0000
+    SHGFP_TYPE_CURRENT = 0
+    buf = ctypes.create_unicode_buffer(ctypes.wintypes.MAX_PATH)
+    ctypes.windll.shell32.SHGetFolderPathW(None, CSIDL_DESKTOP, None, SHGFP_TYPE_CURRENT, buf)
+    return buf.value
+
 
 # Used for loading environment variables
 load_dotenv()
@@ -19,6 +30,9 @@ OPENAI_MODEL = "gpt-4o"
 genai.configure(api_key=GOOGLE_API_KEY)
 openai.api_key = OPENAI_API_KEY
 
+# Storing conversation history
+chat_log = []
+
 # User chooses which model to use
 print("Choose your AI model:")
 print("1. OpenAI ChatGPT")
@@ -32,19 +46,25 @@ if choice == '1':
         user_input = input("You: ")
         if user_input.lower() == 'stop':
             break
+        if not user_input:
+            print("⚠️ Input cannot be empty. ⚠️")
         messages.append({"role": "user", "content": user_input})
+        chat_log.append(f"You: {user_input}")
 
         try:
             response = openai.ChatCompletion.create(model=OPENAI_MODEL,messages=messages)
             reply = response.choices[0].message.content.strip()
             messages.append({"role": "assistant", "content": reply})
+            chat_log.append(f"GPT-4o: {reply}")
             print("GPT-4o:", reply)
+        # If user hit rate limit display error message
         except openai.error.RateLimitError:
             print("❌❌❌❌❌❌❌❌❌❌❌❌❌❌❌❌❌❌❌❌❌❌❌❌❌❌❌❌❌❌❌")
             print("❌ You’ve run out of OpenAI usage today or exceeded your quota.❌")
             print("❌❌❌❌❌❌❌❌❌❌❌❌❌❌❌❌❌❌❌❌❌❌❌❌❌❌❌❌❌❌❌")
             print("Visit https://platform.openai.com/account/usage to check your usage.\n")
             break
+
 elif choice == '2':
     model = genai.GenerativeModel(GOOGLE_MODEL)
     chat_session = model.start_chat()
@@ -55,12 +75,16 @@ elif choice == '2':
         if user_input.lower() == "stop":
             break
         if not user_input:
-            print("⚠️ Input cannot be empty. Try again.")
+            print("⚠️ Input cannot be empty. Try again. ⚠️")
             continue
+
+        chat_log.append(f"You: {user_input}")
 
         try:
             response = chat_session.send_message(user_input)
-            print("Gemini:", response.text)
+            reply = response.text
+            chat_log.append(f"Gemini: {reply}")
+            print("Gemini:", reply)
         except ResourceExhausted:
             print("❌❌❌❌❌❌❌❌❌❌❌❌❌❌❌❌❌❌❌❌❌❌❌❌❌❌❌❌❌❌❌")
             print("❌         You’ve hit your Gemini rate limit or quota.            ❌")
@@ -72,4 +96,20 @@ elif choice == '2':
             break
 else:
     print("Invalid choice. Exiting...")
+
+# Saving chatlog as .txt file
+if chat_log:
+    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"chat_log_{'openai' if choice == '1' else 'gemini'}_{timestamp}.txt"
+
+    desktop_path = get_windows_desktop_path()
+    if not os.path.exists(desktop_path):
+        desktop_path = "."  # fallback if desktop doesn't exist
+
+    full_path = os.path.join(desktop_path, filename)
+    with open(full_path, "w", encoding="utf-8") as f:
+        f.write("\n".join(chat_log))
+
+    print("Saving to:", desktop_path)
+    print(f"\n📝 Chat log saved to '{filename}' 📝")
 
