@@ -100,12 +100,14 @@ else:
 # Saving chatlog as .txt file
 if chat_log:
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    # filename depends on which model is used
     filename = f"chat_log_{'openai' if choice == '1' else 'gemini'}_{timestamp}.txt"
 
+    # mapping desktop path to desktop_path variable
     desktop_path = get_windows_desktop_path()
     if not os.path.exists(desktop_path):
         desktop_path = "."  # fallback if desktop doesn't exist
-
+    # getting full path to desktop
     full_path = os.path.join(desktop_path, filename)
     with open(full_path, "w", encoding="utf-8") as f:
         f.write("\n".join(chat_log))
