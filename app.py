@@ -1,6 +1,6 @@
 # LIBRARIES
 import tkinter as tk
-from tkinter import scrolledtext, messagebox, ttk, simpledialog
+from tkinter import scrolledtext, messagebox, ttk, simpledialog, filedialog
 from dotenv import load_dotenv
 import openai
 import google.generativeai as genai
@@ -12,6 +12,13 @@ from pathlib import Path
 import webbrowser
 import json
 import shutil
+import ttkbootstrap as tb
+from ttkbootstrap.constants import *
+import PyPDF2
+import docx
+import csv
+from fpdf import FPDF
+
 
 # PROGRAM LOGIC
 
@@ -35,38 +42,159 @@ current_model = "OpenAI"
 last_saved_file = None  # Store last saved filename
 timestamps_enabled = True
 user_name = "You"
+theme_mode = "light"
+current_lang = "en"
 
 # setting the UI
-root = tk.Tk()
+root = tb.Window(themename="darkly")
 root.title("Mister Drac's AI Chatbot")
 root.geometry("1080x620")
 root.minsize(700, 500)
+root.iconbitmap("icon.ico")
 
-# Modern style tweaks
-style = ttk.Style()
-style.configure("TButton", font=("Segoe UI", 10))
-style.configure("TCombobox", font=("Segoe UI", 10))
-
-# Configure grid layout to be responsive
+# Grid layout configuration
 root.columnconfigure(0, weight=1)
 root.columnconfigure(1, weight=0)
 root.columnconfigure(2, weight=0)
+root.columnconfigure(3, weight=0)
 root.rowconfigure(0, weight=1)
 
-# Chat display
-chat_display = scrolledtext.ScrolledText(root, wrap=tk.WORD, state='disabled', font=("Segoe UI", 11), bg="#f4f4f4")
-chat_display.grid(row=0, column=0, columnspan=3, sticky="nsew", padx=10, pady=(10, 5))
+# Languages
+LANGUAGES = {
+    "en": {"send": "Send"},
+    "de": {"send": "Senden"},
+    "pl": {"send": "Wyślij"},
+    "ru": {"send": "Отправить"},
+    "fr": {"send": "Envoyer"},
+    "hr": {"send": "Pošalji"},
+    "zh": {"send": "发送"},
+    "es": {"send": "Enviar"},
+    "tr": {"send": "Gönder"},
+}
 
-# User input
-user_input = tk.Entry(root, font=("Segoe UI", 11))
+# Chat display (tkinter)
+chat_frame = tb.Frame(root)
+chat_frame.grid(row=0, column=0, columnspan=4, sticky="nsew", padx=10, pady=(10,5))
+chat_frame.columnconfigure(0, weight=1)
+chat_frame.rowconfigure(0, weight=1)
+# Themed Text widget
+chat_display = tk.Text(
+    chat_frame,
+    wrap="word",
+    state="disabled",
+    font=("Segoe UI", 11),
+    bg="#2b2b2b",         # background to match 'darkly'
+    fg="#ffffff",         # text color
+    insertbackground="#ffffff",  # cursor color
+    relief="flat",        # cleaner look
+    bd=0
+)
+chat_display.grid(row=0, column=0, sticky="nsew")
+
+# Scrollbar remains themed
+chat_scroll = tb.Scrollbar(
+    chat_frame,
+    bootstyle="dark",
+    orient="vertical",
+    command=chat_display.yview
+)
+chat_scroll.grid(row=0, column=1, sticky="ns")
+
+chat_display.configure(yscrollcommand=chat_scroll.set)
+
+# Entry (ttkbootstrap)
+user_input = tb.Entry(root, font=("Segoe UI", 11))
 user_input.grid(row=1, column=0, padx=(10, 5), pady=(5, 10), sticky="ew")
 user_input.bind("<Return>", lambda event: send_message())
-root.columnconfigure(0, weight=1)
 
-# Model dropdown
-model_selector = ttk.Combobox(root, values=["OpenAI", "Gemini"], state="readonly", width=10)
+# Send button (ttkbootstrap)
+send_button = tb.Button(root, text=LANGUAGES["en"]["send"], bootstyle="success")
+send_button.grid(row=1, column=2, padx=(5, 10), pady=(5, 10))
+
+# Model dropdown (ttkbootstrap)
+model_selector = tb.Combobox(root, values=["OpenAI", "Gemini"], state="readonly", width=10)
 model_selector.set("OpenAI")
 model_selector.grid(row=1, column=1, padx=5, pady=(5, 10))
+
+# Upload button logic
+# function for handling uploaded documents
+def handle_file_upload():
+    file_path = filedialog.askopenfilename(
+        filetypes=[
+            ("Text files", "*.txt"),
+            ("PDF files", "*.pdf"),
+            ("Word documents", "*.docx"),
+            ("CSV files", "*.csv")
+        ],
+        title="Select a file"
+    )
+    if not file_path:
+        return
+
+    try:
+        content = ""
+        if file_path.endswith(".txt"):
+            with open(file_path, "r", encoding="utf-8") as f:
+                content = f.read()
+
+        elif file_path.endswith(".pdf"):
+            with open(file_path, "rb") as f:
+                reader = PyPDF2.PdfReader(f)
+                content = "\n".join([page.extract_text() for page in reader.pages if page.extract_text()])
+
+        elif file_path.endswith(".docx"):
+            doc = docx.Document(file_path)
+            content = "\n".join([para.text for para in doc.paragraphs])
+
+        elif file_path.endswith(".csv"):
+            with open(file_path, "r", encoding="utf-8") as f:
+                reader = csv.reader(f)
+                content = "\n".join([", ".join(row) for row in reader])
+
+        else:
+            display_bot_message("❌ Unsupported file type.")
+            return
+
+        if not content.strip():
+            display_bot_message("⚠️ File is empty or unreadable.")
+            return
+
+        # Prompt user for desired action
+        action = simpledialog.askstring("Action", "What do you want to do with the file?\nOptions: summarize / translate")
+
+        if not action or action.lower() not in ("summarize", "translate"):
+            display_bot_message("❌ Action cancelled or unsupported.")
+            return
+
+        short_content = content[:3000]  # to avoid token overflow
+
+        if action.lower() == "summarize":
+            prompt = f"Summarize this document:\n{short_content}"
+        else:
+            target_lang = simpledialog.askstring("Translate To", "Translate to which language? (e.g., English, German)")
+            prompt = f"Translate this document to {target_lang}:\n{short_content}"
+
+        user_input.delete(0, tk.END)
+        user_input.insert(0, prompt)
+        send_message()
+
+    except Exception as e:
+        display_bot_message(f"❌ Failed to read file: {e}")
+# Upload button
+upload_button = tb.Button(root, text="📎 Upload", bootstyle="secondary", command=handle_file_upload)
+upload_button.grid(row=1, column=4, padx=(5, 10), pady=(5, 10))
+
+# Language dropdown (ttkbootstrap)
+language_selector = tb.Combobox(root, values=list(LANGUAGES.keys()), state="readonly", width=8)
+language_selector.set("en")
+language_selector.grid(row=1, column=3, padx=5, pady=(5, 10))
+
+# Language switch callback
+def update_language(*args):
+    current_lang = language_selector.get()
+    send_button.config(text=LANGUAGES[current_lang]["send"])
+
+language_selector.bind("<<ComboboxSelected>>", update_language)
 
 # Commands list
 COMMANDS = {
@@ -88,6 +216,7 @@ COMMANDS = {
     "/deletefile": "Delete the last saved .txt file",
     "/openlog": "Open the folder containing saved logs",
     "/exportjson": "Export chat history as JSON",
+    "/exportpdf": "Export chat log as a styled PDF",
     "/openaiusage": "Open OpenAI usage dashboard in browser",
     "/geminiusagelink": "Open Gemini API key dashboard",
     "/setname": "Set your display name in chat",
@@ -95,8 +224,6 @@ COMMANDS = {
     "/shrink": "Collapse chat history to summary (if supported)",
     "/translate": "Translate last response to selected language",
 }
-
-
 
 def get_desktop_path():
     # Return the user's Desktop path on Windows, macOS, or Linux with OneDrive support.
@@ -165,7 +292,7 @@ def handle_command(cmd):
         display_bot_message("💬 Send your feedback to: dev@yourdomain.com")
 
     elif cmd_lower == "/theme":
-        display_bot_message("🎨 Theme toggling is not implemented yet.")
+        toggle_theme()
 
     elif cmd_lower == "/copylast":
         if chat_log:
@@ -226,6 +353,9 @@ def handle_command(cmd):
             display_bot_message(f"🗃️ Exported chat as JSON:\n{json_file.name}")
         except Exception as e:
             display_bot_message(f"❌ Export failed: {str(e)}")
+
+    elif cmd_lower == "/exportpdf":
+        export_chat_to_pdf()
 
     elif cmd_lower == "/openaiusage":
         webbrowser.open("https://platform.openai.com/account/usage")
@@ -313,6 +443,7 @@ def display_bot_message(text):
     chat_display.yview(tk.END)
     chat_log.append(f"{timestamp} System: {text}")
 
+# for command /save
 def manual_save():
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     filename = f"chat_log_{current_model.lower()}_{timestamp}.txt"
@@ -322,9 +453,42 @@ def manual_save():
     try:
         with open(full_path, "w", encoding="utf-8") as f:
             f.write("\n".join(chat_log))
-        messagebox.showinfo("Chat Saved", f"Chat log saved to:\n{full_path}")
+        messagebox.showinfo(LANGUAGES[current_lang]["chat_saved"], LANGUAGES[current_lang]["saved"].format(full_path))
     except Exception as e:
-        messagebox.showerror("Save Error", f"Failed to save chat log:\n{e}")
+        messagebox.showerror(LANGUAGES[current_lang]["save_error_title"], LANGUAGES[current_lang]["save_error"].format(e))
+
+# for /theme command
+themes = ["darkly", "flatly", "cyborg", "minty", "solar", "superhero", "cosmo", "lumen", "pulse", "sandstone", "united", "yeti",
+          "morph", "simplex", "cerculean", "vapor", "litera"]
+current_theme_index = 0
+def toggle_theme():
+    global current_theme_index
+    current_theme_index = (current_theme_index + 1) % len(themes)
+    new_theme = themes[current_theme_index]
+    root.style.theme_use(new_theme)
+    display_bot_message(f"🎨 Theme switched to {new_theme}.")
+
+# for /exportpdf command
+def export_chat_to_pdf():
+    try:
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"chat_log_{timestamp}.pdf"
+        desktop_path = get_desktop_path()
+        full_path = os.path.join(desktop_path, filename)
+
+        pdf = FPDF()
+        pdf.set_auto_page_break(auto=True, margin=15)
+        pdf.add_page()
+        pdf.set_font("Arial", size=12)
+
+        for line in chat_log:
+            # Avoid breaking PDF formatting with long lines
+            pdf.multi_cell(0, 10, line)
+
+        pdf.output(full_path)
+        display_bot_message(f"📄 PDF exported to Desktop:\n{filename}")
+    except Exception as e:
+        display_bot_message(f"❌ Failed to export PDF: {e}")
 
 
 # Send button
@@ -395,11 +559,10 @@ def on_closing():
         try:
             with open(full_path, "w", encoding="utf-8") as f:
                 f.write("\n".join(chat_log))
-            messagebox.showinfo("Chat Saved", f"Chat log saved to:\n{full_path}")
+            messagebox.showinfo(LANGUAGES[current_lang]["chat_saved"], LANGUAGES[current_lang]["saved"].format(full_path))
         except Exception as e:
-            messagebox.showerror("Save Error", f"Failed to save chat log:\n{e}")
+            messagebox.showerror(LANGUAGES[current_lang]["save_error_title"], LANGUAGES[current_lang]["save_error"].format(e))
     root.destroy() # destroys window and exits the app
-
 
 root.protocol("WM_DELETE_WINDOW", on_closing)
 root.mainloop()
