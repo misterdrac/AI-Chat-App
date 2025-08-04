@@ -18,10 +18,11 @@ import PyPDF2
 import docx
 import csv
 from fpdf import FPDF
+from translations import LANGUAGES, tr
+
 
 
 # PROGRAM LOGIC
-
 # loading environment variables
 load_dotenv()
 # getting and setting API keys
@@ -59,19 +60,6 @@ root.columnconfigure(2, weight=0)
 root.columnconfigure(3, weight=0)
 root.rowconfigure(0, weight=1)
 
-# Languages
-LANGUAGES = {
-    "en": {"send": "Send"},
-    "de": {"send": "Senden"},
-    "pl": {"send": "Wyślij"},
-    "ru": {"send": "Отправить"},
-    "fr": {"send": "Envoyer"},
-    "hr": {"send": "Pošalji"},
-    "zh": {"send": "发送"},
-    "es": {"send": "Enviar"},
-    "tr": {"send": "Gönder"},
-}
-
 # Chat display (tkinter)
 chat_frame = tb.Frame(root)
 chat_frame.grid(row=0, column=0, columnspan=4, sticky="nsew", padx=10, pady=(10,5))
@@ -99,16 +87,15 @@ chat_scroll = tb.Scrollbar(
     command=chat_display.yview
 )
 chat_scroll.grid(row=0, column=1, sticky="ns")
-
 chat_display.configure(yscrollcommand=chat_scroll.set)
 
-# Entry (ttkbootstrap)
+# Entry (ttkbootstrap) - defining dimensions, font, binding for a certain function
 user_input = tb.Entry(root, font=("Segoe UI", 11))
 user_input.grid(row=1, column=0, padx=(10, 5), pady=(5, 10), sticky="ew")
 user_input.bind("<Return>", lambda event: send_message())
 
-# Send button (ttkbootstrap)
-send_button = tb.Button(root, text=LANGUAGES["en"]["send"], bootstyle="success")
+# Send button (ttkbootstrap) - defining dimensions and it's text based on current language
+send_button = tb.Button(root, text=tr("send", current_lang), bootstyle="success")
 send_button.grid(row=1, column=2, padx=(5, 10), pady=(5, 10))
 
 # Model dropdown (ttkbootstrap)
@@ -117,7 +104,6 @@ model_selector.set("OpenAI")
 model_selector.grid(row=1, column=1, padx=5, pady=(5, 10))
 
 # Upload button logic
-# function for handling uploaded documents
 def handle_file_upload():
     file_path = filedialog.askopenfilename(
         filetypes=[
@@ -136,52 +122,46 @@ def handle_file_upload():
         if file_path.endswith(".txt"):
             with open(file_path, "r", encoding="utf-8") as f:
                 content = f.read()
-
         elif file_path.endswith(".pdf"):
             with open(file_path, "rb") as f:
                 reader = PyPDF2.PdfReader(f)
-                content = "\n".join([page.extract_text() for page in reader.pages if page.extract_text()])
-
+                content = "\n".join([p.extract_text() for p in reader.pages if p.extract_text()])
         elif file_path.endswith(".docx"):
             doc = docx.Document(file_path)
             content = "\n".join([para.text for para in doc.paragraphs])
-
         elif file_path.endswith(".csv"):
             with open(file_path, "r", encoding="utf-8") as f:
                 reader = csv.reader(f)
                 content = "\n".join([", ".join(row) for row in reader])
-
         else:
-            display_bot_message("❌ Unsupported file type.")
+            display_bot_message(tr("error_prefix", current_lang) + " " + tr("unsupported_file", current_lang))
             return
 
         if not content.strip():
-            display_bot_message("⚠️ File is empty or unreadable.")
+            display_bot_message(tr("file_empty", current_lang))
             return
 
-        # Prompt user for desired action
-        action = simpledialog.askstring("Action", "What do you want to do with the file?\nOptions: summarize / translate")
-
+        action = simpledialog.askstring("Action", tr("file_prompt_action", current_lang))
         if not action or action.lower() not in ("summarize", "translate"):
-            display_bot_message("❌ Action cancelled or unsupported.")
+            display_bot_message(tr("action_cancelled", current_lang))
             return
 
-        short_content = content[:3000]  # to avoid token overflow
-
+        short_content = content[:3000]
         if action.lower() == "summarize":
-            prompt = f"Summarize this document:\n{short_content}"
+            prompt = f"{tr('summary_header', current_lang)}{short_content}"
         else:
-            target_lang = simpledialog.askstring("Translate To", "Translate to which language? (e.g., English, German)")
-            prompt = f"Translate this document to {target_lang}:\n{short_content}"
+            target_lang = simpledialog.askstring("Translate To", tr("file_prompt_language", current_lang))
+            prompt = f"{tr('translate_header', current_lang).format(lang=target_lang)}{short_content}"
 
         user_input.delete(0, tk.END)
         user_input.insert(0, prompt)
         send_message()
 
     except Exception as e:
-        display_bot_message(f"❌ Failed to read file: {e}")
+        display_bot_message(tr("messages.file_read_error", current_lang).format(e))
+
 # Upload button
-upload_button = tb.Button(root, text="📎 Upload", bootstyle="secondary", command=handle_file_upload)
+upload_button = tb.Button(root, text=tr("upload", current_lang), bootstyle="secondary", command=handle_file_upload)
 upload_button.grid(row=1, column=4, padx=(5, 10), pady=(5, 10))
 
 # Language dropdown (ttkbootstrap)
@@ -191,39 +171,14 @@ language_selector.grid(row=1, column=3, padx=5, pady=(5, 10))
 
 # Language switch callback
 def update_language(*args):
+    global current_lang
     current_lang = language_selector.get()
-    send_button.config(text=LANGUAGES[current_lang]["send"])
-
+    send_button.config(text=tr("send", current_lang))
+    upload_button.config(text=tr("upload", current_lang))
+    language_selector.config(values=list(LANGUAGES.keys()))
 language_selector.bind("<<ComboboxSelected>>", update_language)
 
-# Commands list
-COMMANDS = {
-    "/help": "Show available commands",
-    "/save": "Manually save the chat to desktop",
-    "/clear": "Clear chat history and screen",
-    "/exit": "Exit the application",
-    "/model": "Show current active model",
-    "/switch": "Switch between OpenAI and Gemini",
-    "/stats": "Show usage stats",
-    "/feedback": "Write feedback to developer",
-    "/theme": "Toggle theme (if supported)",
-    "/copylast": "Copy last response",
-    "/saveas": "Save chat log with custom filename",
-    "/history": "Show recent user messages",
-    "/version": "Show app version",
-    "/timestamp": "Toggle timestamps on/off in chat view",
-    "/reset": "Reset the AI context/session",
-    "/deletefile": "Delete the last saved .txt file",
-    "/openlog": "Open the folder containing saved logs",
-    "/exportjson": "Export chat history as JSON",
-    "/exportpdf": "Export chat log as a styled PDF",
-    "/openaiusage": "Open OpenAI usage dashboard in browser",
-    "/geminiusagelink": "Open Gemini API key dashboard",
-    "/setname": "Set your display name in chat",
-    "/emoji": "Insert common emojis",
-    "/shrink": "Collapse chat history to summary (if supported)",
-    "/translate": "Translate last response to selected language",
-}
+
 
 def get_desktop_path():
     # Return the user's Desktop path on Windows, macOS, or Linux with OneDrive support.
@@ -261,15 +216,25 @@ def handle_command(cmd):
     chat_display.yview(tk.END)
 
     if cmd_lower == "/help":
-        help_text = "\n".join([f"{k} — {v}" for k, v in COMMANDS.items()])
-        display_bot_message("📖 Available commands:\n" + help_text)
+        # Grab the per-language commands map (or fall back to English)
+        cmds = LANGUAGES.get(current_lang, {}).get("commands")
+        if not isinstance(cmds, dict):
+            cmds = LANGUAGES["en"]["commands"]
+
+        # Build each line: "/foo — localized description"
+        lines = [f"{cmd} — {desc}" for cmd, desc in cmds.items()]
+
+        # Join them and display under the localized header
+        help_body = "\n".join(lines)
+        display_bot_message(f"{tr('help_header', current_lang)}\n{help_body}")
+        return
 
     elif cmd_lower == "/clear":
         chat_display.config(state='normal')
         chat_display.delete('1.0', tk.END)
         chat_display.config(state='disabled')
         chat_log.clear()
-        display_bot_message("🧹 Chat cleared.")
+        display_bot_message(tr("messages.chat_cleared", current_lang))
 
     elif cmd_lower == "/save":
         manual_save()
@@ -278,18 +243,18 @@ def handle_command(cmd):
         root.quit()
 
     elif cmd_lower == "/model":
-        display_bot_message(f"🤖 Current model: {current_model}")
+        display_bot_message(tr("messages.current_model", current_lang).format(current_model))
 
     elif cmd_lower == "/switch":
         model_selector.set("Gemini" if current_model == "OpenAI" else "OpenAI")
         current_model = model_selector.get()
-        display_bot_message(f"🔁 Switched to {current_model}")
+        display_bot_message(tr("messages.switched_model", current_lang).format(current_model))
 
     elif cmd_lower == "/stats":
-        display_bot_message(f"📊 Messages exchanged: {len(chat_log)}")
+        display_bot_message(tr("messages.messages_exchanged", current_lang).format(len(chat_log)))
 
     elif cmd_lower == "/feedback":
-        display_bot_message("💬 Send your feedback to: dev@yourdomain.com")
+        display_bot_message(tr("messages.feedback", current_lang))
 
     elif cmd_lower == "/theme":
         toggle_theme()
@@ -298,9 +263,9 @@ def handle_command(cmd):
         if chat_log:
             root.clipboard_clear()
             root.clipboard_append(chat_log[-1])
-            display_bot_message("✅ Last response copied to clipboard.")
+            display_bot_message(tr("messages.copied", current_lang))
         else:
-            display_bot_message("⚠️ Nothing to copy.")
+            display_bot_message(tr("messages.nothing_to_copy", current_lang))
 
     elif cmd_lower == "/saveas":
         filename = simpledialog.askstring("Save As", "Enter custom filename:")
@@ -311,36 +276,36 @@ def handle_command(cmd):
                 with open(path, "w", encoding="utf-8") as f:
                     f.write("\n".join(chat_log))
                 last_saved_file = path
-                display_bot_message(f"✅ Chat saved as '{filename}'")
+                display_bot_message(tr("messages.chat_saved_as", current_lang).format(filename))
             except Exception as e:
-                display_bot_message(f"❌ Failed to save: {str(e)}")
+                display_bot_message(tr("messages.chat_save_failed", current_lang).format(str(e)))
 
     elif cmd_lower == "/history":
         user_messages = [line for line in chat_log if line.strip().endswith(":") is False and user_name in line]
-        display_bot_message("📜 Last messages:\n" + "\n".join(user_messages[-5:]))
+        display_bot_message(tr("messages.last_messages", current_lang) + "\n".join(user_messages[-5:]))
 
     elif cmd_lower == "/version":
-        display_bot_message("📦 Version 1.0.0")
+        display_bot_message(tr("messages.version", current_lang))
 
     elif cmd_lower == "/timestamp":
         timestamps_enabled = not timestamps_enabled
-        display_bot_message(f"⏱️ Timestamps {'enabled' if timestamps_enabled else 'disabled'}.")
+        display_bot_message(tr("timestamps_on", current_lang) if timestamps_enabled else tr("timestamps_off"))
 
     elif cmd_lower == "/reset":
         messages.clear()
         messages.append({"role": "system", "content": "You are a helpful assistant."})
         chat_session = None
-        display_bot_message("🔄 AI context reset.")
+        display_bot_message(tr("context_reset", current_lang))
 
     elif cmd_lower == "/deletefile":
         if last_saved_file and last_saved_file.exists():
             try:
                 last_saved_file.unlink()
-                display_bot_message(f"🗑️ Deleted {last_saved_file.name}")
+                display_bot_message(tr("file_deleted", current_lang).format(last_saved_file.name))
             except Exception as e:
-                display_bot_message(f"❌ Failed to delete file: {e}")
+                display_bot_message(tr("file_delete_failed", current_lang).format(e))
         else:
-            display_bot_message("⚠️ No saved file to delete.")
+            display_bot_message(tr("no_file_to_delete", current_lang))
 
     elif cmd_lower == "/openlog":
         os.startfile(get_desktop_path()) if os.name == 'nt' else os.system(f'open "{get_desktop_path()}"')
@@ -350,9 +315,9 @@ def handle_command(cmd):
         try:
             with open(json_file, "w", encoding="utf-8") as f:
                 json.dump(chat_log, f, indent=2)
-            display_bot_message(f"🗃️ Exported chat as JSON:\n{json_file.name}")
+            display_bot_message(tr("json_exported", current_lang).format(json_file.name))
         except Exception as e:
-            display_bot_message(f"❌ Export failed: {str(e)}")
+            display_bot_message(tr("json_export_failed", current_lang).format(str(e)))
 
     elif cmd_lower == "/exportpdf":
         export_chat_to_pdf()
@@ -367,15 +332,15 @@ def handle_command(cmd):
         new_name = simpledialog.askstring("Set Name", "Enter your name:")
         if new_name:
             user_name = new_name
-            display_bot_message(f"🙋 Your name is now: {user_name}")
+            display_bot_message(tr("name_set", current_lang).format(user_name))
 
     elif cmd_lower == "/emoji":
         emoji_list = "😀 😎 🤖 🧠 💬 ✅ ❌ 💡 🔁 📝"
-        display_bot_message("💬 Emojis you can use:\n" + emoji_list)
+        display_bot_message(tr("emoji_list", current_lang).format(emoji_list))
 
     elif cmd_lower == "/shrink":
         if len(chat_log) < 4:
-            display_bot_message("🧠 Not enough content to summarize.")
+            display_bot_message(tr("not_enough_to_summarize", current_lang))
         else:
             try:
                 summary_prompt = "Summarize the following conversation:\n\n" + "\n".join(chat_log[-10:])
@@ -384,16 +349,16 @@ def handle_command(cmd):
                         model=OPENAI_MODEL,
                         messages=[{"role": "user", "content": summary_prompt}]
                     )
-                    summary = summary_response.choices[0].message.content.strip()
+                    summary = summary_response.choices[0].messages.content.strip()
                 else:
                     if chat_session is None:
                         model = genai.GenerativeModel(GOOGLE_MODEL)
                         chat_session = model.start_chat()
                     summary_response = chat_session.send_message(summary_prompt)
                     summary = summary_response.text
-                display_bot_message("🧠 Summary:\n" + summary)
+                display_bot_message(tr("summary_result", current_lang) + summary)
             except Exception as e:
-                display_bot_message(f"❌ Summarization failed: {e}")
+                display_bot_message(tr("summary_failed", current_lang).format(e))
 
     elif cmd_lower.startswith("/translate"):
         # Default to English if no language is specified
@@ -403,7 +368,7 @@ def handle_command(cmd):
         # Find last assistant message
         last_response = next((msg for msg in reversed(chat_log) if current_model in msg), None)
         if not last_response:
-            display_bot_message("🌐 No assistant response found to translate.")
+            display_bot_message(tr("no_response_to_translate", current_lang))
         else:
             try:
                 translate_prompt = f"Translate this into {lang}:\n{last_response}"
@@ -411,29 +376,29 @@ def handle_command(cmd):
                     translation = openai.ChatCompletion.create(
                         model=OPENAI_MODEL,
                         messages=[{"role": "user", "content": translate_prompt}]
-                    ).choices[0].message.content.strip()
+                    ).choices[0].messages.content.strip()
                 else:
                     if chat_session is None:
                         model = genai.GenerativeModel(GOOGLE_MODEL)
                         chat_session = model.start_chat()
                     translation = chat_session.send_message(translate_prompt).text
 
-                display_bot_message(f"🌐 Translation ({lang}):\n{translation}")
+                    display_bot_message(tr("translation_result", current_lang).format(lang, translation))
             except Exception as e:
-                display_bot_message(f"❌ Translation failed: {e}")
+                display_bot_message(tr("translation_failed", current_lang))
 
 
     elif cmd_lower == "/":
             suggestions = "\n".join(COMMANDS.keys())
-            display_bot_message("📘 All commands:\n" + suggestions)
+            display_bot_message(tr("all_commands", current_lang) + suggestions)
 
     else:
         # Suggestions for partial command
         filtered = [cmd for cmd in COMMANDS if cmd.startswith(cmd_lower)]
         if filtered:
-            display_bot_message("🤔 Did you mean:\n" + "\n".join(filtered))
+            display_bot_message(tr("did_you_mean", current_lang) + "\n".join(filtered))
         else:
-            display_bot_message("❓ Unknown command. Type /help to see available commands.")
+            display_bot_message(tr("unknown_command", current_lang))
 
 def display_bot_message(text):
     timestamp = datetime.datetime.now().strftime("[%H:%M]")
@@ -466,7 +431,7 @@ def toggle_theme():
     current_theme_index = (current_theme_index + 1) % len(themes)
     new_theme = themes[current_theme_index]
     root.style.theme_use(new_theme)
-    display_bot_message(f"🎨 Theme switched to {new_theme}.")
+    display_bot_message(tr("messages.theme", current_lang).format(new_theme))
 
 # for /exportpdf command
 def export_chat_to_pdf():
@@ -486,10 +451,9 @@ def export_chat_to_pdf():
             pdf.multi_cell(0, 10, line)
 
         pdf.output(full_path)
-        display_bot_message(f"📄 PDF exported to Desktop:\n{filename}")
+        display_bot_message(tr("pdf_export_success", current_lang).format(filename))
     except Exception as e:
-        display_bot_message(f"❌ Failed to export PDF: {e}")
-
+        display_bot_message(tr("pdf_export_failed", current_lang).format(e))
 
 # Send button
 def send_message():
@@ -520,7 +484,7 @@ def send_message():
         if model_choice == "OpenAI":
             messages.append({"role": "user", "content": prompt})
             response = openai.ChatCompletion.create(model=OPENAI_MODEL, messages=messages)
-            reply = response.choices[0].message.content.strip()
+            reply = response.choices[0].messages.content.strip()
             messages.append({"role": "assistant", "content": reply})
         else:
             if chat_session is None:
@@ -530,11 +494,11 @@ def send_message():
             reply = response.text
     # error handling for exceeding the rate limit or some exceptions
     except openai.error.RateLimitError:
-        reply = "❌ OpenAI quota exceeded. Visit https://platform.openai.com/account/usage"
+        reply = tr("rate_limit_openai")
     except ResourceExhausted:
-        reply = "❌ Gemini quota exceeded. Visit https://makersuite.google.com/app/apikey"
+        reply = tr("rate_limit_gemini")
     except Exception as e:
-        reply = f"❌ Error: {str(e)}"
+        reply = tr("error_prefix").format(e)
 
     # Show assistant message
     timestamp = datetime.datetime.now().strftime("[%H:%M]")
