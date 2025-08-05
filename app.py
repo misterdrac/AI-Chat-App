@@ -178,7 +178,9 @@ def handle_file_upload():
         elif file_path.endswith(".pdf"):
             with open(file_path, "rb") as f:
                 reader = PyPDF2.PdfReader(f)
-                content = "\n".join([p.extract_text() for p in reader.pages if p.extract_text()])
+                content = "\n".join(
+                    [p.extract_text() for p in reader.pages if p.extract_text()]
+                )
         elif file_path.endswith(".docx"):
             doc = docx.Document(file_path)
             content = "\n".join([para.text for para in doc.paragraphs])
@@ -187,14 +189,17 @@ def handle_file_upload():
                 reader = csv.reader(f)
                 content = "\n".join([", ".join(row) for row in reader])
         else:
-            display_bot_message(tr("error_prefix", current_lang) + " " + tr("unsupported_file", current_lang))
+            display_bot_message(f"{tr('error_prefix', current_lang)} {tr('unsupported_file', current_lang)}")
             return
 
         if not content.strip():
             display_bot_message(tr("file_empty", current_lang))
             return
 
-        action = simpledialog.askstring("Action", tr("file_prompt_action", current_lang))
+        action = simpledialog.askstring(
+            "Action",
+            tr("messages.file_prompt_action", current_lang)
+        )
         if not action or action.lower() not in ("summarize", "translate"):
             display_bot_message(tr("action_cancelled", current_lang))
             return
@@ -203,15 +208,17 @@ def handle_file_upload():
         if action.lower() == "summarize":
             prompt = f"{tr('summary_header', current_lang)}{short_content}"
         else:
-            target_lang = simpledialog.askstring("Translate To", tr("file_prompt_language", current_lang))
-            prompt = f"{tr('translate_header', current_lang).format(lang=target_lang)}{short_content}"
+            target_lang = simpledialog.askstring("Translate To", tr("messages.file_prompt_language", current_lang))
+            prompt = (tr("translate_header", current_lang).format(lang=target_lang) + short_content)
 
         user_input.delete(0, tk.END)
         user_input.insert(0, prompt)
         send_message()
 
     except Exception as e:
-        display_bot_message(tr("messages.file_read_error", current_lang).format(e))
+        display_bot_message(
+            tr("messages.file_read_error", current_lang).format(e)
+        )
 
 # Upload button
 upload_button = tb.Button(root, text=tr("upload", current_lang), bootstyle="secondary", command=handle_file_upload)
