@@ -336,23 +336,23 @@ def handle_command(cmd):
 
     elif cmd_lower == "/timestamp":
         timestamps_enabled = not timestamps_enabled
-        display_bot_message(tr("timestamps_on", current_lang) if timestamps_enabled else tr("timestamps_off"))
+        display_bot_message(tr("messages.timestamps_on", current_lang) if timestamps_enabled else tr("messages.timestamps_off"))
 
     elif cmd_lower == "/reset":
         messages.clear()
         messages.append({"role": "system", "content": "You are a helpful assistant."})
         chat_session = None
-        display_bot_message(tr("context_reset", current_lang))
+        display_bot_message(tr("messages.context_reset", current_lang))
 
     elif cmd_lower == "/deletefile":
         if last_saved_file and last_saved_file.exists():
             try:
                 last_saved_file.unlink()
-                display_bot_message(tr("file_deleted", current_lang).format(last_saved_file.name))
+                display_bot_message(tr("messages.file_deleted", current_lang).format(last_saved_file.name))
             except Exception as e:
-                display_bot_message(tr("file_delete_failed", current_lang).format(e))
+                display_bot_message(tr("messages.file_delete_failed", current_lang).format(e))
         else:
-            display_bot_message(tr("no_file_to_delete", current_lang))
+            display_bot_message(tr("messages.no_file_to_delete", current_lang))
 
     elif cmd_lower == "/openlog":
         os.startfile(get_desktop_path()) if os.name == 'nt' else os.system(f'open "{get_desktop_path()}"')
@@ -362,9 +362,9 @@ def handle_command(cmd):
         try:
             with open(json_file, "w", encoding="utf-8") as f:
                 json.dump(chat_log, f, indent=2)
-            display_bot_message(tr("json_exported", current_lang).format(json_file.name))
+            display_bot_message(tr("messages.json_exported", current_lang).format(json_file.name))
         except Exception as e:
-            display_bot_message(tr("json_export_failed", current_lang).format(str(e)))
+            display_bot_message(tr("messages.json_export_failed", current_lang).format(str(e)))
 
     elif cmd_lower == "/exportpdf":
         export_chat_to_pdf()
@@ -379,15 +379,15 @@ def handle_command(cmd):
         new_name = simpledialog.askstring("Set Name", "Enter your name:")
         if new_name:
             user_name = new_name
-            display_bot_message(tr("name_set", current_lang).format(user_name))
+            display_bot_message(tr("messages.name_set", current_lang).format(user_name))
 
     elif cmd_lower == "/emoji":
         emoji_list = "😀 😎 🤖 🧠 💬 ✅ ❌ 💡 🔁 📝"
-        display_bot_message(tr("emoji_list", current_lang).format(emoji_list))
+        display_bot_message(tr("messages.emoji_list", current_lang).format(emoji_list))
 
     elif cmd_lower == "/shrink":
         if len(chat_log) < 4:
-            display_bot_message(tr("not_enough_to_summarize", current_lang))
+            display_bot_message(tr("messages.not_enough_to_summarize", current_lang))
         else:
             try:
                 summary_prompt = "Summarize the following conversation:\n\n" + "\n".join(chat_log[-10:])
@@ -403,9 +403,9 @@ def handle_command(cmd):
                         chat_session = model.start_chat()
                     summary_response = chat_session.send_message(summary_prompt)
                     summary = summary_response.text
-                display_bot_message(tr("summary_result", current_lang) + summary)
+                display_bot_message(tr("messages.summary_result", current_lang) + summary)
             except Exception as e:
-                display_bot_message(tr("summary_failed", current_lang).format(e))
+                display_bot_message(tr("messages.summary_failed", current_lang).format(e))
 
     elif cmd_lower.startswith("/translate"):
         # Default to English if no language is specified
@@ -415,7 +415,7 @@ def handle_command(cmd):
         # Find last assistant message
         last_response = next((msg for msg in reversed(chat_log) if current_model in msg), None)
         if not last_response:
-            display_bot_message(tr("no_response_to_translate", current_lang))
+            display_bot_message(tr("messages.no_response_to_translate", current_lang))
         else:
             try:
                 translate_prompt = f"Translate this into {lang}:\n{last_response}"
@@ -430,14 +430,9 @@ def handle_command(cmd):
                         chat_session = model.start_chat()
                     translation = chat_session.send_message(translate_prompt).text
 
-                    display_bot_message(tr("translation_result", current_lang).format(lang, translation))
+                    display_bot_message(tr("messages.translation_result", current_lang).format(lang, translation))
             except Exception as e:
-                display_bot_message(tr("translation_failed", current_lang))
-
-
-    elif cmd_lower == "/":
-            suggestions = "\n".join(COMMANDS.keys())
-            display_bot_message(tr("all_commands", current_lang) + suggestions)
+                display_bot_message(tr("messages.translation_failed", current_lang))
 
     else:
         # Suggestions for partial command
@@ -471,8 +466,9 @@ def export_chat_to_pdf():
     try:
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         filename = f"chat_log_{timestamp}.pdf"
-        desktop_path = get_desktop_path()
-        full_path = os.path.join(desktop_path, filename)
+        desktop = get_desktop_path()           # this now returns a Path
+        desktop.mkdir(parents=True, exist_ok=True)
+        full_path: Path = desktop / filename
 
         pdf = FPDF()
         pdf.set_auto_page_break(auto=True, margin=15)
@@ -480,13 +476,14 @@ def export_chat_to_pdf():
         pdf.set_font("Arial", size=12)
 
         for line in chat_log:
-            # Avoid breaking PDF formatting with long lines
-            pdf.multi_cell(0, 10, line)
+            # replace characters that Latin-1 can't encode
+            safe_line = line.encode("latin-1", "replace").decode("latin-1")
+            pdf.multi_cell(0, 10, safe_line)
 
-        pdf.output(full_path)
-        display_bot_message(tr("pdf_export_success", current_lang).format(filename))
+        pdf.output(str(full_path))
+        display_bot_message(tr("messages.pdf_export_success", current_lang).format(filename))
     except Exception as e:
-        display_bot_message(tr("pdf_export_failed", current_lang).format(e))
+        display_bot_message(tr("messages.pdf_export_failed", current_lang).format(e))
 
 # Save and exit
 def on_closing():
