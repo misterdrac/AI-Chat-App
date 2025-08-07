@@ -19,6 +19,10 @@ import docx
 import csv
 from fpdf import FPDF
 from translations import LANGUAGES, tr
+from PIL import ImageTk
+import requests
+from imageprocessing import generate_image
+
 
 
 # PROGRAM LOGIC
@@ -222,8 +226,38 @@ def handle_file_upload():
 
 # Upload button
 upload_button = tb.Button(root, text=tr("upload", current_lang), bootstyle="secondary", command=handle_file_upload)
-upload_button.grid(row=2, column=4, padx=(5, 10), pady=(5, 10))
+upload_button.grid(row=2, column=5, padx=(5, 10), pady=(5, 10))
 
+def handle_generate_image():
+    display_bot_message(tr("messages.image_generation_started", current_lang))
+    try:
+        prompt = user_input.get().strip()
+        if not prompt:
+            raise ValueError("no prompt")
+
+        img_path = generate_image(prompt)
+
+        display_bot_message(
+            tr("messages.image_generation_success", current_lang).format(img_path)
+        )
+
+        # Optionally insert into chat_display:
+        img = tk.PhotoImage(file=img_path)
+        chat_display.image_create(tk.END, image=img)
+        chat_display.insert(tk.END, "\n")
+        chat_display.images.append(img)  # keep reference
+
+    except Exception as e:
+        # print full traceback to console for debugging
+        import traceback; traceback.print_exc()
+
+        display_bot_message(
+            tr("messages.image_generation_failed", current_lang).format(e)
+        )
+
+# Generate Image button
+generate_button = tb.Button(root, text=tr("image_button", current_lang), bootstyle="info", command=handle_generate_image)
+generate_button.grid(row=2, column=4, padx=5, pady=(5,10))
 
 # Language dropdown (ttkbootstrap)
 language_selector = tb.Combobox(root, values=list(LANGUAGES.keys()), state="readonly", width=8)

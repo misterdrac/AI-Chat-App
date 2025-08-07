@@ -5,6 +5,7 @@ LANGUAGES = {
     "en": {
         "send": "Send",
         "upload": "📎 Upload",
+        "image_button": "🖼️ Image",
         "model": "Model",
         "language": "Language",
         "chat_saved": "Chat Saved",
@@ -59,7 +60,10 @@ LANGUAGES = {
             "file_prompt_action": "What do you want to do with the file?\nOptions: summarize / translate",
             "file_prompt_language": "Translate to which language? (e.g., English, German)",
             "pdf_export_success": "📄 PDF exported to Desktop:\n{}",
-            "pdf_export_failed": "❌ Failed to export PDF: {}"
+            "pdf_export_failed": "❌ Failed to export PDF: {}",
+            "image_generation_started": "🖼️ Generating image…",
+            "image_generation_success": "✅ Image ready: {}",
+            "image_generation_failed": "❌ Image generation failed: {}"
         },
         "commands": {
             "/help": "Show available commands",
